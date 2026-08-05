@@ -163,9 +163,11 @@ def unfold(cell, x_ids: torch.Tensor, h0):
     is_lstm = isinstance(cell, LSTMCell)
     outs = []
     if is_lstm:
-        h, c = h0, torch.zeros_like(h0)
+        h = h0
+        c = torch.zeros_like(h0)
     else:
         h = h0
+        c = None
     for t in range(T):
         x_t = F.one_hot(x_ids[:, t], num_classes=vocab).float()
         if is_lstm:
