@@ -67,10 +67,9 @@ class PointerGenerator(nn.Module):
         cov = torch.zeros(B, S, device=device)
         dec_in = torch.full((B,), _BOS, device=device)
         total = torch.zeros((), device=device)
-        self.last_pg = None
         for t in range(1, tgt.size(1)):
             emb = self.dec_emb(dec_in)                     # [B,H]
-            # 注意力：query=d存活隐状态 h[-1]，另受 coverage 惩罚
+            # 注意力：query=上一步 decoder 隐状态 h[-1]，另受 coverage 惩罚
             score = torch.bmm(attn_q, h[-1].unsqueeze(-1)).squeeze(-1)  # [B,S]
             score = score - 0.2 * cov
             alpha = torch.softmax(score, dim=-1)           # [B,S]
@@ -93,7 +92,6 @@ class PointerGenerator(nn.Module):
             cov_aux = torch.minimum(alpha, cov).sum()
             total = total + ce + 0.2 * cov_aux
             cov = cov + alpha
-            self.last_pg = pg.detach()
             dec_in = torch.where(gold < BASE, gold,
                                  torch.full_like(gold, _UNK))  # OOV 回退 UNK 作输入
         return total
@@ -106,6 +104,42 @@ def make_batch(B: int, max_len: int) -> tuple:
                      (src + BASE),
                      torch.full((B, 1), _EOS, device=device)], dim=1)
     return src, tgt  # tgt[:,1:] == src+4（gold = 对应扩展 id）
+
+
+@torch.no_grad()
+def copy_accuracy(model, n: int = 20, max_len: int = 6) -> float:
+    """held-out 教师式逐 token 准确率：检验是否**真的复制 OOV**（指针生成能力）。"""
+    model.eval()
+    correct = total = 0
+    for _ in range(n):
+        src, tgt = make_batch(1, max_len)
+        enc_out = model.encoder(model.src_emb(src))[0]
+        attn_q = model.attn_key(enc_out)                   # [1,S,H]
+        h = torch.zeros(1, 1, model.hid, device=src.device)
+        cov = torch.zeros(1, src.size(1), device=src.device)
+        dec_in = torch.full((1,), _BOS, device=src.device)
+        for t in range(1, tgt.size(1)):
+            emb = model.dec_emb(dec_in)                    # [1,H]
+            score = torch.bmm(attn_q, h[-1].unsqueeze(-1)).squeeze(-1) - 0.2 * cov
+            alpha = torch.softmax(score, -1)               # [1,S]
+            ctx = torch.bmm(alpha.unsqueeze(1), enc_out).squeeze(1)   # [1,H]
+            out, h = model.decoder(torch.cat([emb, ctx], -1).unsqueeze(1), h)
+            dec_h = out.squeeze(1)                         # [1,H]
+            pg = torch.sigmoid(model.pgen(torch.cat([dec_h, ctx, emb], -1))[:, 0])
+            pv = torch.softmax(model.out_vocab(dec_h), -1) # [1,BASE]
+            pv_ext = torch.zeros(1, EXT, device=src.device)
+            pv_ext[:, :BASE] = pv
+            pc = torch.zeros(1, EXT, device=src.device)
+            pc.scatter_add_(1, (src + BASE), alpha)        # 复制分布
+            final = pg.unsqueeze(1) * pv_ext + (1 - pg).unsqueeze(1) * pc
+            gold = tgt[:, t].item()
+            pred = int(final.argmax(-1).item())
+            correct += int(pred == gold)
+            total += 1
+            cov = cov + alpha
+            dec_in = torch.where(tgt[:, t] < BASE, tgt[:, t],
+                                 torch.full_like(tgt[:, t], _UNK))
+    return correct / max(total, 1)
 
 
 if __name__ == "__main__":
@@ -148,7 +182,6 @@ if __name__ == "__main__":
     model = PointerGenerator(64).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=1e-2)
     losses = []
-    pgs = []
     for _ in range(120):
         opt.zero_grad(set_to_none=True)
         src, tgt = make_batch(8, 6)
@@ -157,10 +190,8 @@ if __name__ == "__main__":
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         losses.append(loss.item())
-        if model.last_pg is not None:
-            pgs.append(float(model.last_pg.mean()))
     assert losses[0] > losses[-1], f"no convergence: {losses[0]:.3f}->{losses[-1]:.3f}"
-    avg_pg = sum(pgs[-50:]) / 50
-    assert avg_pg < 1.0 and avg_pg > 0.0
+    acc = copy_accuracy(model, n=20)
+    assert acc >= 0.7, f"copy accuracy too low: {acc:.3f} (pointer should copy OOV)"
     print(f"[PASS] copy task loss {losses[0]:.3f} -> {losses[-1]:.3f}; "
-          f"avg p_gen={avg_pg:.2f} (copy path mixed in, 1-p_gen>0)")
+          f"held-out copy accuracy {acc:.2f}")

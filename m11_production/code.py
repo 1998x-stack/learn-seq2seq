@@ -98,24 +98,26 @@ def train_amp(model, optim, scaler, steps=240):
 
 
 @torch.no_grad()
-def exact_match(model, n=8):
+def reversal_accuracy(model, n=8, L=5):
+    """holdout 上教师式逐位准确率（确定性评测：模型是否学会反转映射）。"""
     model.eval()
-    ok = 0
-    L = 5
+    correct = total = 0
     for _ in range(n):
         src = torch.randint(1, VOCAB, (1, L)).to(device)
+        tgt = torch.cat([torch.full((1, 1), BOS, device=device),
+                         torch.flip(src, [1]),
+                         torch.full((1, 1), EOS, device=device)], dim=1)
         enc_out, _ = model.enc(model.embed(src))
         h = enc_out[:, -1:].transpose(0, 1)
-        dec_in = torch.tensor([BOS], device=device)
-        pred = []
-        for _ in range(L):
+        dec_in = tgt[:, 0]
+        for t in range(1, tgt.size(1)):
             out, h = model.dec(model.embed(dec_in).unsqueeze(1), h)
-            tok = model.out(out.squeeze(1)).argmax(-1)
-            pred.append(int(tok.item()))
-            dec_in = tok
-        gold = torch.flip(src[0], [0]).tolist()
-        ok += int(pred == gold)
-    return ok / n
+            pred = int(model.out(out.squeeze(1)).argmax(-1).item())
+            gold = int(tgt[:, t].item())
+            correct += int(pred == gold)
+            total += 1
+            dec_in = tgt[:, t]  # 教师强制推进真值
+    return correct / max(total, 1)
 
 
 if __name__ == "__main__":
@@ -142,16 +144,16 @@ if __name__ == "__main__":
     scaler = torch.cuda.amp.GradScaler() if device.type == "cuda" else None
     m = TinySeq2Seq().to(device)
     opt = torch.optim.Adam(m.parameters(), lr=3e-3)
-    losses = train_amp(m, opt, scaler, steps=480)
+    losses = train_amp(m, opt, scaler, steps=800)
     assert all(torch.isfinite(torch.tensor(x)) for x in losses)
     assert losses[0] > losses[-1], f"AMP loss not decreasing: {losses}"
     print(f"[PASS] AMP training converges ({scaler is not None}): "
           f"{losses[0]:.3f} -> {losses[-1]:.3f}")
 
-    # [D] 评测：holdout exact-match
-    acc = exact_match(m, 10)
-    assert acc >= 0.6, f"exact-match too low after train: {acc:.2f}"
-    print(f"[PASS] eval exact-match on holdout: {acc:.2f}")
+    # [D] 评测：holdout 教师式准确率
+    acc = reversal_accuracy(m, 10)
+    assert acc >= 0.8, f"reversal accuracy too low after train: {acc:.2f}"
+    print(f"[PASS] eval teacher-forced reversal accuracy on holdout: {acc:.2f}")
 
     # [C] DDP：world_size=1（gloo）也能 wrap 并前向
     mcpu = TinySeq2Seq()                              # CPU 模型，配 gloo

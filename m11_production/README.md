@@ -24,7 +24,7 @@ v1.0 的目标：把这些生产机制逐个落地，并给每个机制一套**�
 | Checkpoint | `state_dict` + `torch.save/load` | 存盘→载入→同输入前向一致 `[A]` |
 | AMP | `autocast` + `GradScaler` | loss 下降、无 NaN `[B]` |
 | DDP | `DistributedDataParallel` | `.module` 可还原、单步前向跑通 `[C]` |
-| 评测 | holdout Exact-Match | 训练后 ≥0.6 `[D]` |
+| 评测 | holdout 教师式准确率 | 训练后 ≥0.8 `[D]` |
 
 ## How It Works
 
@@ -57,7 +57,7 @@ scaler.step(optim); scaler.update()
 
 ### 4. 评测
 
-训练后在 unseen 随机序列上做贪心反转解码，计算 **Exact-Match**（整条预测 == 反转真值）。
+训练后在 unseen 随机序列上，按真实 target 教师式推进并逐位比较 argmax，计算 **教师式准确率**（反映"模型是否学会反转映射"的确定性评测）。
 
 ## Code Walkthrough
 
@@ -75,7 +75,7 @@ if scaler is not None:
 
 ### Step 2: `__main__` 四段自检
 
-`[A]` 存→载→前向一致 → `[PASS]`；`[B]` AMP loss **1.487→0.339** → `[PASS]`；`[D]` holdout Exact-Match **0.60** → `[PASS]`；`[C]` DDP wrap `.module==model` → `[PASS]`。
+`[A]` 存→载→前向一致 → `[PASS]`；`[B]` AMP loss **1.487→0.234** → `[PASS]`；`[D]` holdout 教师式准确率 **0.87** → `[PASS]`；`[C]` DDP wrap `.module==model` → `[PASS]`。
 
 ## Key Design Decisions
 
@@ -91,7 +91,7 @@ if scaler is not None:
 - **生产 Checkpoint 不止 state_dict**：还要存 tokenizer/词表版本、优化器与调度器状态、`best_validation_loss`、`global_step`——versions.md 给的字典都在这。
 - **AMP 只在 CUDA 有意义**：CPU 上 autocast 是 no-op；`device.type=='cuda'` 才建 scaler。
 - **DDP 的跨进程坑**：每 rank 数据要不同（打乱/切分），梯度靠 all-reduce 均一；单进程演示只验证"包装结构正确"。
-- **评测要分训练/验证/测试**：本模块演示了机制（Exact-Match 跑得起来），真实上线还要 BLEU/COMET + 三重切分（见 m09 的 BLEU / versions.md）。
+- **评测要分训练/验证/测试**：本模块用教师式准确率演示了评测机制（跑得起来、能反映学习），真实上线还要 BLEU/COMET + 三重切分（见 m09 的 BLEU / versions.md）。
 
 ## 模块定位
 
