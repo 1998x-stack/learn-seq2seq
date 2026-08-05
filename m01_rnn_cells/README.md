@@ -112,6 +112,7 @@ return (1 - torch.sigmoid(z)) * n + torch.sigmoid(z) * h_prev
 ### Step 4: `__main__` 自检
 
 1. **数值对齐**：把同一份权重拷贝进手写 Cell 与 `nn.RNNCell/LSTMCell/GRUCell`，单步输出 `max abs diff == 5.96e-08` → 打印 `[PASS] forward == PyTorch`
+1.5. **反向正确性**：解析梯度 vs 中心有限差分，三种 Cell 全部一致 → 打印 `[PASS] grad == finite-difference`
 2. **能学会时间记忆**：`unfold` 逐 step 展开，训练一个"延时一位复现"任务——第 t 步预测第 t-1 步的 token。三种 Cell 的 loss 都从 ~2.0 掉到 ~0.2 → 打印 `[PASS] loss decreased`
 
 ## Key Design Decisions
@@ -121,6 +122,7 @@ return (1 - torch.sigmoid(z)) * n + torch.sigmoid(z) * h_prev
 | **权重用 `nn.Parameter` 而非 `nn.Linear` 组合** | 教学要暴露每个 gate 的矩阵语义；`nn.Linear` 隐藏了维度拼接。手写让「r/z/n 各自是第几块」一目了然。 |
 | **GRU 候选单独分块算** | `r·h_{t-1}` 必须先进 `tanh`；把 `n` 块权重 `W_ih[2H:]` 单独切片是对的公式，同时自然保留 autograd（不 detach）。 |
 | **与 PyTorch 内置做数值对齐** | 这是"手写是否正确"的黄金基准。教科书公式的 `sigmoid/tanh`、门序、拼接顺序都可能写反；对齐断言把这些一次性捕获。 |
+| **用中心有限差分校验梯度** | `forward==PyTorch` 只证**前向**对；反向（BPTT）同样容易错（`c_t=f*c+i*g` 的乘积与门求导）。加一条"解析梯度==数值梯度"的自检，才能真正兜住反向。这也暴露了 torch 2.10 的 `nn.LSTMCell` 在 CUDA+double 下的反向怪癖——本模块的 LSTM 用差分校验通过，不依赖 torch。 |
 | **张量放 device** | 教学代码片段容易把 `torch.zeros` 留在 CPU 而输入在 CUDA。统一用 `xs.device` 对齐所有临时张量。 |
 
 ## Going Deeper

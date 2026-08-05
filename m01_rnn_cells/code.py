@@ -183,6 +183,45 @@ def make_delay_task(B: int, L: int, vocab: int) -> torch.Tensor:
     return torch.randint(0, vocab, (B, L)).to(device)
 
 
+def gradient_check(cell, x_t, state) -> bool:
+    """集中有限差分校验：让输出的 L2 关于各权重参数的解析梯度 == 数值梯度。
+
+    返回是否全部命中（torch 无关，是本模块可复现的反向正确性判据）。
+    """
+    cell.zero_grad()
+    loss = hidden_loss(cell, x_t, state)
+    loss.backward()
+    grads = [p.grad.detach().clone() for p in cell.parameters()]
+    eps = 1e-6
+    ok = True
+    for p, g in zip(cell.parameters(), grads):
+        pflat = p.data.flatten()
+        gflat = g.flatten()
+        for idx in range(p.numel()):
+            orig = pflat[idx].item()
+            pflat[idx] = orig + eps
+            lp = hidden_loss(cell, x_t, state)
+            pflat[idx] = orig - eps
+            lm = hidden_loss(cell, x_t, state)
+            pflat[idx] = orig
+            fd = (lp - lm) / (2 * eps)
+            if abs(fd - gflat[idx].item()) > 1e-4 * max(1.0, abs(fd)):
+                ok = False
+                break
+        if not ok:
+            break
+    return ok
+
+
+def hidden_loss(cell, x_t, h0) -> "torch.Tensor":
+    """单步前向后对状态取 L2 作为标量损失（供梯度校验）。"""
+    if isinstance(cell, LSTMCell):
+        hn, (hn, cn) = cell(x_t, (h0, torch.zeros_like(h0)))
+        return (hn ** 2).sum() + (cn ** 2).sum()
+    hn = cell(x_t, h0)
+    return (hn ** 2).sum()
+
+
 # ----------------------------------------------------------------------------
 # 5. 主程序：自检 + 数值对齐 + 学习小任务
 # ----------------------------------------------------------------------------
@@ -219,6 +258,18 @@ if __name__ == "__main__":
         diff = (h_m - h_r).abs().max().item()
         assert diff < 1e-5, (mine_cls.__name__, diff)
         print(f"[PASS] {mine_cls.__name__} forward == PyTorch (max abs diff {diff:.2e})")
+
+    # ---- [1.5] 反向正确性：解析梯度 == 中心有限差分（torch 无关）----
+    torch.manual_seed(3)
+    for cls in (RNNCell, LSTMCell, GRUCell):
+        cell = cls(4, 16).double().to(device)
+        with torch.no_grad():
+            for p in cell.parameters():
+                p.uniform_(-0.3, 0.3)
+        x_g = torch.randn(3, 4, device=device).double()
+        h_g = torch.randn(3, 16, device=device).double()
+        assert gradient_check(cell, x_g, h_g), f"{cls.__name__} gradient failed"
+        print(f"[PASS] {cls.__name__} grad == finite-difference (backward correct)")
 
     # ---- [2] 三种 Cell 都能在"延时一位复现"任务上学到时间记忆 ----
     # 自监督：第 t 步预测第 t-1 步的 token，强制 cell 在时间上保留一位信息。
