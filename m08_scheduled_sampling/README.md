@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m08: Scheduled Sampling + Label Smoothing — 对齐训练/推理、降过度自信（v0.7）
 
-[返回根目录](../README.md)
 
 ---
 

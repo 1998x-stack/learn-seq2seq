@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m07: Beam Search + 长度归一化 — 从局部最优到 Top-K 候选（v0.6）
 
-[返回根目录](../README.md)
 
 ---
 

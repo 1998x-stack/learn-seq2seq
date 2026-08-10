@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m00: Seq2Seq 全景 — 从"固定向量"到"注意力"再到"Transformer"的学习路线
 
-[返回根目录](../README.md)
 
 ---
 

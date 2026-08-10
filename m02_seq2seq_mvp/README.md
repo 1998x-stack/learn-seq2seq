@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m02: GRU Encoder-Decoder MVP — 英文数字序列→中文数字序列（v0.1）
 
-[返回根目录](../README.md)
 
 ---
 

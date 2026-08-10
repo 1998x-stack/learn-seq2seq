@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m12: Transformer Encoder-Decoder — 拆除循环依赖、并行训练（v1.1）
 
-[返回根目录](../README.md)
 
 ---
 

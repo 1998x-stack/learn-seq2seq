@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m06: 深层 Seq2Seq — Multi-layer + Dropout + Residual + LayerNorm（v0.5）
 
-[返回根目录](../README.md)
 
 ---
 

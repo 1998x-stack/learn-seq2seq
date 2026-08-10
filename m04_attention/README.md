@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m04: Bahdanau Attention — 让 Decoder 每步重新回顾输入（v0.3）
 
-[返回根目录](../README.md)
 
 ---
 

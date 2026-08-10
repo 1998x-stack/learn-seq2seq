@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m05: 双向 Encoder + Bridge — 让每个位置同时看到左右上下文（v0.4）
 
-[返回根目录](../README.md)
 
 ---
 

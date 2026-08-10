@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m03: 规范化批处理（v0.2）— Padding / Mask / pack_padded_sequence
 
-[返回根目录](../README.md)
 
 ---
 

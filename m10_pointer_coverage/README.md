@@ -1,6 +1,7 @@
+[返回根目录](../README.md)
+
 # m10: Pointer-Generator + Coverage — 复制 OOV、防重复生成（v0.9）
 
-[返回根目录](../README.md)
 
 ---
 
