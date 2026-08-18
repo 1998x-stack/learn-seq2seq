@@ -1,5 +1,7 @@
 # Learn Seq2Seq — 从 RNN 到 Transformer 的递进式实现教程（PyTorch）
 
+> **English TL;DR:** Build sequence-to-sequence systems from scratch in PyTorch — hand-written RNN/LSTM/GRU cells → GRU Encoder-Decoder MVP (v0.1) → batched training (v0.2) → Bahdanau attention (v0.3) → bidirectional encoder (v0.4) → deep nets (v0.5) → beam search (v0.6) → scheduled sampling / label smoothing (v0.7) → real NLP data (v0.8) → copy/coverage (v0.9) → production training (v1.0) → Transformer encoder-decoder (v1.1). 13 modules (m00–m12), each with a runnable `code.py`.
+
 从零用 PyTorch 搭建 Sequence-to-Sequence 系统，覆盖 `learn-seq2seq/versions.md` 的完整迭代路线：**手写 RNN/LSTM/GRU Cell → GRU Encoder-Decoder MVP（v0.1）→ 规范化批处理（v0.2）→ Bahdanau Attention（v0.3）→ 双向 Encoder（v0.4）→ 深层网络（v0.5）→ Beam Search（v0.6）→ Scheduled Sampling / Label Smoothing（v0.7）→ 真实 NLP 数据（v0.8）→ Copy/Coverage（v0.9）→ 生产训练（v1.0）→ Transformer（v1.1）**。
 
 本教程是 learn-claude-code / learn-llm / learn-deep-research 系列在"从零拆装 Seq2Seq"方向的延伸。每个模块一个目录，含中文教程（Problem → Solution → How It Works → Code Walkthrough → Key Design Decisions → Going Deeper）与自包含可运行 `code.py`。
