@@ -218,9 +218,12 @@ if __name__ == "__main__":
     kept = (ids2 != pad)
     loss_manual = nn.functional.cross_entropy(logits[kept], ids2[kept])
     assert torch.allclose(loss_pad, loss_manual, atol=1e-6)
-    # pad 位被忽略 -> loss 变小
-    assert loss_pad < loss_all
-    print(f"[PASS] ignore_index=pad: CE_with_pad[{loss_all:.3f}] -> "
+    # 忽略位置只改变参与平均的样本集合，并不保证 loss 必然降低。
+    # 用原始 target 在保留位置上的 CE 做独立交叉检查。
+    loss_kept_original = nn.functional.cross_entropy(logits[kept], ids[kept])
+    assert torch.allclose(loss_pad, loss_kept_original, atol=1e-6)
+    assert kept.sum().item() < ids.numel()
+    print(f"[PASS] ignore_index=pad: CE_all[{loss_all:.3f}], "
           f"CE_ignore_pad[{loss_pad:.3f}] == manual[{loss_manual:.3f}]")
 
     # ---- 3：bucket 后 batch 内长度差有界 ----
